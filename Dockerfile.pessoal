@@ -1,0 +1,59 @@
+# Usar a imagem base Python 3.11.6-slim-bookworm
+FROM python:3.11.6-slim-bookworm as base
+
+WORKDIR /app
+
+# Instalar ferramentas e dependências necessárias
+RUN apt-get update && apt-get install -y \
+    libopenblas-dev \
+    ninja-build \
+    build-essential \
+    pkg-config \
+    wget \
+    vim \
+    git \
+ && rm -rf /var/lib/apt/lists/*
+ 
+
+# Definir o tempo de espera do Pip (por exemplo, 1000 segundos)
+ENV PIP_DEFAULT_TIMEOUT=1000
+
+# Clonar o repositório do GitHub
+RUN git clone https://github.com/imartinez/privateGPT .
+
+# Criar ambiente virtual e instalar dependências
+RUN python3.11 -m venv .venv \
+ && .venv/bin/pip install --upgrade pip \
+ && .venv/bin/pip install poetry
+
+RUN .venv/bin/poetry install --with local 
+RUN .venv/bin/poetry install --with ui
+
+FROM python:3.11.6-slim-bookworm
+
+WORKDIR /app
+
+# Copiar o ambiente virtual
+COPY --from=base /app/.venv /app/.venv
+
+# Copiar o código do aplicativo
+COPY --from=base /app /app
+
+# Configurar o path para usar os binários do .venv
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Executar o script de setup
+#RUN .venv/bin/python ./scripts/setup
+
+# Expor a porta em que o servidor estará rodando
+EXPOSE 8001
+
+# Copiar o script de entrada para a imagem
+COPY entrypoint.sh /app/
+
+# Definir o script de entrada como executável
+RUN chmod +x /app/entrypoint.sh
+
+# Definir o comando para iniciar o container
+CMD ["/app/entrypoint.sh"]
+
